@@ -17,25 +17,6 @@ import argparse
 import random
 from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
-import histomicstk as htk
-
-#need to change ref img path here!!!#
-def color_norm(inputimg, ref_img_path='/Image/WSI/TCGA-AN-A0FK-01Z-00-DX1.8966A1D5-CE3A-4B08-A1F6-E613BEB1ABD1_2_4.jpg',
-stain_unmixing_routine_params= {'stains': ['hematoxylin', 'eosin'],
-'stain_unmixing_method': 'macenko_pca'}):
-    """
-    Color Normalization
-    ref_img_path: path of reference image
-    example: '/Image/WSI/TCGA-AN-A0FK-01Z-00-DX1.8966A1D5-CE3A-4B08-A1F6-E613BEB1ABD1_2_4.jpg'
-    inputimg: RGB image
-    """
-    refimg=skimage.io.imread(ref_img_path)[:,:,:3]
-    mask_img = np.dot(inputimg[...,:3], [0.299, 0.587, 0.114])
-    mask_img=np.where(mask_img<=215,False,True)
-    img_norm=htk.preprocessing.color_normalization.deconvolution_based_normalization(inputimg,
-    im_target=refimg,stain_unmixing_routine_params=stain_unmixing_routine_params,mask_out=mask_img)
-    return img_norm
-
 
 
 
@@ -174,7 +155,6 @@ def process_svs(slide_path):
         for row in range(rows):
             tile = np.asarray(generator.get_tile(level, (col,row)))
             if keep_tile(tile, tile.shape[0], 0.75):
-                tile=color_norm(tile)
                 kept_tiles.append(tile)
                 kept_grids.append((col,row))
     end_time = time.time()
