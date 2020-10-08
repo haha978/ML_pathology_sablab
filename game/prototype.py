@@ -17,9 +17,10 @@ parser = argparse.ArgumentParser()
 
 
 parser.add_argument('--path', type=str, default='/Users/caglabahadir/Desktop/Prototype/', help='Input path')
-parser.add_argument('--magnification',type=float, default=10)
-parser.add_argument('--tile_size',type=int, default=256)
+parser.add_argument('--magnification',type=float, default=20)
+parser.add_argument('--tile_size',type=int, default=224)
 parser.add_argument('--output_path',type=str,default="/Users/caglabahadir/Desktop/Prototype/")
+parser.add_argument('--random_patch_number',type=int,default=100)
 
 args = parser.parse_args()
 #def main():
@@ -37,7 +38,9 @@ tile_name_list =[]
 for root, dirs, files in os.walk(args.path):
     for file in files:
         if file.endswith('.svs'):
-                tile_name_list.append(root+"/"+file)
+            tile_name_list.append(root+"/"+file)
+
+
 
 ## A placeholder to store number of action patches per svs defined by the pathologist
 action_patch = np.zeros(len(tile_name_list))
@@ -65,19 +68,44 @@ def center_image(image):
 def get_all_tiles(list):
     all_tiles = []
     for tile_name in list:
-        #this is a problem
-        #try multi pooling -> order of addition really does not matter
-        st_time = time.time()
-        #slide = openslide.open_slide(filepath)
+        #im = pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
         slide = openslide.open_slide(tile_name)
-        generator = DeepZoomGenerator(slide, tile_size=224, overlap=0, limit_bounds=True)
-        ima = generator.get_tile(10, (0, 0))
-        ima.save("/Users/caglabahadir/Desktop/Prototype/tile_"+tile_name[-10:-4]+".png")
-        im = pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
-        end_time = time.time()
-        print('Time took to bring 1 image',(end_time-st_time))
-        center_image(im)
-        all_tiles.append((tile_name,im))
+        maximum_magnification = slide.properties['openslide.objective-power']
+        generator = DeepZoomGenerator(slide, tile_size=args.tile_size, overlap=0, limit_bounds=True)
+        level = generator.level_count-1-int(int(slide.properties['openslide.objective-power'])/(2*args.magnification))
+        [max_tile_address_x,max_tile_address_y] = np.array(generator.level_dimensions[level])/args.tile_size
+
+        print(maximum_magnification)
+        for tile in range(10):
+                #this is a problem
+                #try multi pooling -> order of addition really does not matter
+            st_time = time.time()
+                #slide = openslide.open_slide(filepath)
+            mean_image = 250
+            i=0
+            while mean_image >220:
+                x = np.random.choice(np.arange(int(max_tile_address_x)), 1)
+                y = np.random.choice(np.arange(int(max_tile_address_y)), 1)
+                temp_image = generator.get_tile(level, (x[i], y[i]))
+                mean_image = np.mean(np.array(temp_image))
+                print(np.mean(np.array(temp_image)))
+            raw_image = temp_image.tobytes()  # tostring is deprecated
+            image = pyglet.image.ImageData(temp_image.width, temp_image.height, 'RGB', raw_image)
+                                               #pitch=-temp_image.width * 4)
+            #temp_image.save("/Users/caglabahadir/Desktop/Prototype/tile_" + tile_name[-10:-4] + ".png")
+                #ima =
+                #image=[]
+                #im = image.get_texture() #image # pyglet.resource.image("tile_"+tile_name[-10:-4]+".png") #ima.get_region(0,0,args.tile_size,args.tile_size)# image # = pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
+            im = image.get_texture() #pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
+            end_time = time.time()
+            print('Time took to bring 1 image',(end_time-st_time))
+            center_image(im)
+            all_tiles.append((tile_name,im,[x[i],y[i]]))
+            im=[]
+            image=[]
+            raw_image=[]
+            temp_imagse=[]
+
     return all_tiles
 #want to get (tile_name, image) list of all tiles available
 
@@ -90,6 +118,8 @@ tile_name_i = all_tiles[0][0]
 tile_name_j = all_tiles[1][0]
 tile_i = all_tiles[0][1]
 tile_j = all_tiles[1][1]
+patch_pixel_i = all_tiles[0][2]
+patch_pixel_j = all_tiles[1][2]
 #create main_batch for background and text labels
 main_batch = pyglet.graphics.Batch()
 #initialize image_batch
@@ -133,14 +163,14 @@ Initialize buttons and boxes available
 """
 next_box = shapes.Rectangle(x=game_window.width//2, y = 30, batch = main_batch, color =(100, 100, 255), width = 50, height=30, group = background)
 
-quit_box = shapes.Rectangle(x=3*game_window.width//4, y = 35, batch = main_batch, color =(100, 100, 255), width = 50, height=30, group = background)
+#quit_box = shapes.Rectangle(x=3*game_window.width//4, y = 35, batch = main_batch, color =(100, 100, 255), width = 50, height=30, group = background)
 
 center_image(next_box)
 next_text = pyglet.text.Label(text = 'NEXT',x=game_window.width//2, y = 30,
         batch = main_batch, anchor_x = 'center',anchor_y = 'center', color = (255,255,255,255) ,group = foreground)
 
-quit_text = pyglet.text.Label(text = 'QUIT',x=3*game_window.width//4, y = 35,
-        batch = main_batch,  color = (255,255,255,255) ,group = foreground)
+#quit_text = pyglet.text.Label(text = 'QUIT',x=3*game_window.width//4, y = 35,
+ #       batch = main_batch,  color = (255,255,255,255) ,group = foreground)
 
 button1 = shapes.Circle(x=413, y=150, radius = 15, batch = main_batch, group = background)
 button1_checked = shapes.Circle(x=413, y=150, radius = 12, batch = main_batch,
@@ -153,7 +183,7 @@ button2_checked = shapes.Circle(x=826, y=150, radius = 12,
 
 @game_window.event
 def on_draw():
-    global sprite_i, sprite_j, tile_name_i, tile_name_j,tile_i,tile_j,all_tiles_len
+    global sprite_i, sprite_j, tile_name_i, tile_name_j,tile_i,tile_j,all_tiles_len, patch_pixel_i,patch_pixel_j
     global class_text,class_label, image_batch
     game_window.clear()
     main_batch.draw()
@@ -172,14 +202,14 @@ def in_box(x,y,x_center,y_center,x_width,y_height):
 
 def save_entry (path,tile,action,no_action):
     with open(args.output_path + 'names.csv', 'a', newline='') as csvfile:
-        fieldnames = ['Path', 'Magnification', 'Tile', 'Action', 'No Action']
+        fieldnames = ['Path', 'Magnification', 'Tile', 'Tile Size', 'Action', 'No Action']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         # writer.writeheader()
         writer.writerow({'Path': path, "Magnification": args.magnification,
-                         "Tile": tile, "Action": action, "No Action": no_action})
+                         "Tile": tile, 'Tile Size': args.tile_size, "Action": action, "No Action": no_action})
 @game_window.event
 def on_mouse_press(x, y, button, modifiers):
-    global sprite_i, sprite_j, tile_name_i, tile_name_j,tile_i,tile_j,all_tiles_len
+    global sprite_i, sprite_j, tile_name_i, tile_name_j,tile_i,tile_j,all_tiles_len,patch_pixel_i,patch_pixel_j
     global class_text,class_label, image_batch, button2_checked, button1_checked
     if in_circle(x,y,826,150,15):
         if button == mouse.LEFT:
@@ -196,23 +226,20 @@ def on_mouse_press(x, y, button, modifiers):
     elif in_box(x,y,game_window.width//2,30,50,30):
         print('I am clicking next block')
         #save the result
-        path="hey"
-        path_2="hey"
-        tile="my"
-        tile_2="my_2"
+
         if class_text == 'Action':
             if button1_checked.color == [0,0,0]:
                 lib['Action'].append(tile_name_i)
-                save_entry(path,tile,"true","false")
+                save_entry(tile_name_i,patch_pixel_i,"true","false")
             else:
                 lib['No Action'].append(tile_name_i)
-                save_entry(path, tile, "false", "true")
+                save_entry(tile_name_i, patch_pixel_i, "false", "true")
             if button2_checked.color == [0,0,0]:
                 lib['Action'].append(tile_name_j)
-                save_entry(path_2, tile_2, "true", "false")
+                save_entry(tile_name_j, patch_pixel_j, "true", "false")
             else:
                 lib['No Action'].append(tile_name_j)
-                save_entry(path_2, tile_2, "false", "true")
+                save_entry(tile_name_j, patch_pixel_j, "false", "true")
 
 
         #reset buttons
@@ -231,6 +258,8 @@ def on_mouse_press(x, y, button, modifiers):
         tile_name_j = all_tiles[1][0]
         tile_i = all_tiles[0][1]
         tile_j = all_tiles[1][1]
+        patch_pixel_i = all_tiles[0][2]
+        patch_pixel_j = all_tiles[1][2]
         #drawthem
         all_tiles_len = len(all_tiles)
         sprite_i,sprite_j = draw_helper(tile_i,tile_j,image_batch)
