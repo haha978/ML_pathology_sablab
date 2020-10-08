@@ -23,7 +23,6 @@ parser.add_argument('--output_path',type=str,default="/Users/caglabahadir/Deskto
 parser.add_argument('--random_patch_number',type=int,default=100)
 
 args = parser.parse_args()
-#def main():
 
 with open(args.output_path+'names.csv', 'w') as csvfile:
     fieldnames = ['Path', 'Magnification','Tile','Tile Size','Action','No Action']
@@ -53,11 +52,8 @@ cursor = game_window.get_system_mouse_cursor(game_window.CURSOR_HAND)
 game_window.set_mouse_cursor(cursor)
 
 #define resource, which is where I pull the tiles
-st_time = time.time()
 pyglet.resource.path = [args.path]
 pyglet.resource.reindex()
-end_time = time.time()
-print('Time took to make resource path',(end_time-st_time))
 
 #get center of an image
 def center_image(image):
@@ -91,35 +87,33 @@ def get_all_tiles(list):
                 print(np.mean(np.array(temp_image)))
             raw_image = temp_image.tobytes()  # tostring is deprecated
             image = pyglet.image.ImageData(temp_image.width, temp_image.height, 'RGB', raw_image)
-                                               #pitch=-temp_image.width * 4)
-            #temp_image.save("/Users/caglabahadir/Desktop/Prototype/tile_" + tile_name[-10:-4] + ".png")
-                #ima =
-                #image=[]
-                #im = image.get_texture() #image # pyglet.resource.image("tile_"+tile_name[-10:-4]+".png") #ima.get_region(0,0,args.tile_size,args.tile_size)# image # = pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
             im = image.get_texture() #pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
             end_time = time.time()
             print('Time took to bring 1 image',(end_time-st_time))
             center_image(im)
             all_tiles.append((tile_name,im,[x[i],y[i]]))
-            im=[]
-            image=[]
-            raw_image=[]
-            temp_imagse=[]
 
     return all_tiles
-#want to get (tile_name, image) list of all tiles available
 
 all_tiles = get_all_tiles(tile_name_list)
-
+print(len(all_tiles))
 all_tiles_len = len(all_tiles)
-#initialize first two tiles that will be displayed, tile_name_i tile_name_j will change
+
+"""
+Define class of tile objects to keep track of tile-specific data
+"""
+class tile_obj:
+    def __init__(self,tile_name,tile,patch_pixel):
+        self.tile_name = tile_name
+        self.tile = tile
+        self.patch_pixel = patch_pixel
+    def set_sprite(self,sprite):
+        self.sprite = sprite
+
+#initialize first two tiles that will be displayed
 #as we press button NEXT
-tile_name_i = all_tiles[0][0]
-tile_name_j = all_tiles[1][0]
-tile_i = all_tiles[0][1]
-tile_j = all_tiles[1][1]
-patch_pixel_i = all_tiles[0][2]
-patch_pixel_j = all_tiles[1][2]
+tile_obj1 = tile_obj(all_tiles[0][0],all_tiles[0][1],all_tiles[0][2])
+tile_obj2 = tile_obj(all_tiles[1][0],all_tiles[1][1],all_tiles[1][2])
 #create main_batch for background and text labels
 main_batch = pyglet.graphics.Batch()
 #initialize image_batch
@@ -157,7 +151,9 @@ def delete_sprites(im_1,im_2,all_tiles):
     all_tiles.pop(0)
     all_tiles.pop(0)
 
-sprite_i,sprite_j = draw_helper(tile_i,tile_j,image_batch)
+sprite_i,sprite_j = draw_helper(tile_obj1.tile,tile_obj2.tile,image_batch)
+tile_obj1.set_sprite(sprite_i)
+tile_obj2.set_sprite(sprite_j)
 """
 Initialize buttons and boxes available
 """
@@ -183,7 +179,7 @@ button2_checked = shapes.Circle(x=826, y=150, radius = 12,
 
 @game_window.event
 def on_draw():
-    global sprite_i, sprite_j, tile_name_i, tile_name_j,tile_i,tile_j,all_tiles_len, patch_pixel_i,patch_pixel_j
+    global tile_obj1,tile_obj2
     global class_text,class_label, image_batch
     game_window.clear()
     main_batch.draw()
@@ -209,7 +205,7 @@ def save_entry (path,tile,action,no_action):
                          "Tile": tile, 'Tile Size': args.tile_size, "Action": action, "No Action": no_action})
 @game_window.event
 def on_mouse_press(x, y, button, modifiers):
-    global sprite_i, sprite_j, tile_name_i, tile_name_j,tile_i,tile_j,all_tiles_len,patch_pixel_i,patch_pixel_j
+    global tile_obj1, tile_obj2
     global class_text,class_label, image_batch, button2_checked, button1_checked
     if in_circle(x,y,826,150,15):
         if button == mouse.LEFT:
@@ -229,24 +225,24 @@ def on_mouse_press(x, y, button, modifiers):
 
         if class_text == 'Action':
             if button1_checked.color == [0,0,0]:
-                lib['Action'].append(tile_name_i)
-                save_entry(tile_name_i,patch_pixel_i,"true","false")
+                lib['Action'].append(tile_obj1.tile_name)
+                save_entry(tile_obj1.tile_name, tile_obj1.patch_pixel,"true","false")
             else:
-                lib['No Action'].append(tile_name_i)
-                save_entry(tile_name_i, patch_pixel_i, "false", "true")
+                lib['No Action'].append(tile_obj2.tile_name)
+                save_entry(tile_obj2.tile_name, tile_obj2.patch_pixel, "false", "true")
             if button2_checked.color == [0,0,0]:
-                lib['Action'].append(tile_name_j)
-                save_entry(tile_name_j, patch_pixel_j, "true", "false")
+                lib['Action'].append(tile_obj1.tile_name)
+                save_entry(tile_obj1.tile_name, tile_obj1.patch_pixel, "true", "false")
             else:
-                lib['No Action'].append(tile_name_j)
-                save_entry(tile_name_j, patch_pixel_j, "false", "true")
+                lib['No Action'].append(tile_obj2.tile_name)
+                save_entry(tile_obj1.tile_name, tile_obj2.patch_pixel, "false", "true")
 
 
         #reset buttons
         button1_checked.color = [255,255,255]
         button2_checked.color = [255,255,255]
         #reset pictures
-        delete_sprites(sprite_i,sprite_j,all_tiles)
+        delete_sprites(tile_obj1.sprite,tile_obj2.sprite,all_tiles)
         print(lib)
         #set a new_text box
         class_label.delete()
@@ -254,15 +250,17 @@ def on_mouse_press(x, y, button, modifiers):
         class_label = pyglet.text.Label(text = class_text,
                     x=game_window.width//2, y=game_window.height-300,
                     anchor_x='center', batch = main_batch, group=foreground)
-        tile_name_i = all_tiles[0][0]
-        tile_name_j = all_tiles[1][0]
-        tile_i = all_tiles[0][1]
-        tile_j = all_tiles[1][1]
-        patch_pixel_i = all_tiles[0][2]
-        patch_pixel_j = all_tiles[1][2]
+        tile_obj1.tile_name = all_tiles[0][0]
+        tile_obj2.tile_name = all_tiles[1][0]
+        tile_obj1.tile = all_tiles[0][1]
+        tile_obj2.tile = all_tiles[1][1]
+        tile_obj1.patch_pixel = all_tiles[0][2]
+        tile_obj2.patch_pixel = all_tiles[1][2]
         #drawthem
         all_tiles_len = len(all_tiles)
-        sprite_i,sprite_j = draw_helper(tile_i,tile_j,image_batch)
+        sprite_i,sprite_j = draw_helper(tile_obj1.tile,tile_obj2.tile,image_batch)
+        tile_obj1.sprite = sprite_i
+        tile_obj2.sprite = sprite_j
 
 
 if __name__ == '__main__':
