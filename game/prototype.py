@@ -11,15 +11,15 @@ import numpy as np
 import openslide
 from openslide import OpenSlideError
 from openslide.deepzoom import DeepZoomGenerator
-
+import pathlib
 
 parser = argparse.ArgumentParser()
 
 
-parser.add_argument('--path', type=str, default='/Users/caglabahadir/Desktop/Prototype/', help='Input path')
+parser.add_argument('--path', type=str, default=str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/", help='Input path')
 parser.add_argument('--magnification',type=float, default=20)
 parser.add_argument('--tile_size',type=int, default=224)
-parser.add_argument('--output_path',type=str,default="/Users/caglabahadir/Desktop/Prototype/")
+parser.add_argument('--output_path',type=str,default=str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/")
 parser.add_argument('--random_patch_number',type=int,default=100)
 
 args = parser.parse_args()
@@ -122,11 +122,11 @@ image_batch = pyglet.graphics.Batch()
 background = pyglet.graphics.OrderedGroup(0)
 foreground = pyglet.graphics.OrderedGroup(1)
 #create label for the game_window
-level_label = pyglet.text.Label(text = "My Amazing Game",
+level_label = pyglet.text.Label(text = "Action / No Action Game",
         x=game_window.width//2, y=game_window.height-30,
         anchor_x='center', batch = main_batch, group=foreground)
 #create class label
-class_text = "Action"
+class_text = "Please select the tiles with action."
 class_label = pyglet.text.Label(text = class_text,
             x=game_window.width//2, y=game_window.height-300,
             anchor_x='center', batch = main_batch, group=background)
@@ -223,7 +223,7 @@ def on_mouse_press(x, y, button, modifiers):
         print('I am clicking next block')
         #save the result
 
-        if class_text == 'Action':
+        if class_text == "Please select the tiles with action.":
             if button1_checked.color == [0,0,0]:
                 lib['Action'].append(tile_obj1.tile_name)
                 save_entry(tile_obj1.tile_name, tile_obj1.patch_pixel,"true","false")
@@ -246,7 +246,7 @@ def on_mouse_press(x, y, button, modifiers):
         print(lib)
         #set a new_text box
         class_label.delete()
-        class_text = "Action"
+        class_text = "Please select the tiles with action."
         class_label = pyglet.text.Label(text = class_text,
                     x=game_window.width//2, y=game_window.height-300,
                     anchor_x='center', batch = main_batch, group=foreground)
