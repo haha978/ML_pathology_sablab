@@ -26,7 +26,7 @@ args = parser.parse_args()
 #def main():
 
 with open(args.output_path+'names.csv', 'w') as csvfile:
-    fieldnames = ['Path', 'Magnification','Tile','Action','No Action']
+    fieldnames = ['Path', 'Magnification','Tile','Tile Size','Action','No Action']
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
 
