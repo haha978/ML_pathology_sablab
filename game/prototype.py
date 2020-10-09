@@ -7,6 +7,10 @@ import random
 import time
 import argparse
 import csv
+from scipy.ndimage.morphology import binary_fill_holes
+from skimage.color import rgb2gray
+from skimage.feature import canny
+from skimage.morphology import binary_closing, binary_dilation, disk
 import numpy as np
 import openslide
 from openslide import OpenSlideError
@@ -39,7 +43,81 @@ for root, dirs, files in os.walk(args.path):
         if file.endswith('.svs'):
             tile_name_list.append(root+"/"+file)
 
+def optical_density(tile):
+    """
+    Convert a tile to optical density values.
+    Args:
+    tile: A 3D NumPy array of shape (tile_size, tile_size, channels).
+    Returns:
+    A 3D NumPy array of shape (tile_size, tile_size, channels)
+    representing optical density values.
+    """
+    tile = tile.astype(np.float64)
+    od = -np.log((tile + 1) / 240)
+    return od
 
+def keep_tile(tile, tile_size, tissue_threshold):
+    """
+    Determine if a tile should be kept.
+    This filters out tiles based on size and a tissue percentage
+    threshold, using a custom algorithm. If a tile has height &
+    width equal to (tile_size, tile_size), and contains greater
+    than or equal to the given percentage, then it will be kept;
+    otherwise it will be filtered out.
+    Args:
+     tile: tile is a 3D NumPy array of shape (tile_size, tile_size, channels).
+     tile_size: The width and height of a square tile to be generated.
+     tissue_threshold: Tissue percentage threshold.
+    Returns:
+     A Boolean indicating whether or not a tile should be kept for
+     future usage.
+    """
+    if tile.shape[0:2] == (tile_size, tile_size):
+        tile_orig = tile
+
+        # Check 1
+        # Convert 3D RGB image to 2D grayscale image, from
+        # 0 (dense tissue) to 1 (plain background).
+        tile = rgb2gray(tile)
+        # 8-bit depth complement, from 1 (dense tissue)
+        # to 0 (plain background).
+        tile = 1 - tile
+        # # Canny edge detection with hysteresis thresholding.
+        # # This returns a binary map of edges, with 1 equal to
+        # # an edge. The idea is that tissue would be full of
+        # # edges, while background would not.
+        tile = canny(tile)
+        # Binary closing, which is a dilation followed by
+        # an erosion. This removes small dark spots, which
+        # helps remove noise in the background.
+        tile = binary_closing(tile, disk(10))
+        # Binary dilation, which enlarges bright areas,
+        # and shrinks dark areas. This helps fill in holes
+        # within regions of tissue.
+        tile = binary_dilation(tile, disk(10))
+        # Fill remaining holes within regions of tissue.
+        tile = binary_fill_holes(tile)
+        # Calculate percentage of tissue coverage.
+        percentage = tile.mean()
+        check1 = percentage >= tissue_threshold
+
+        # Check 2
+        # Convert to optical density values
+        tile = optical_density(tile_orig)
+        # Threshold at beta
+        beta = 0.15
+        tile = np.min(tile, axis=2) >= beta
+        # Apply morphology for same reasons as above.
+        tile = binary_closing(tile, disk(2))
+        tile = binary_dilation(tile, disk(2))
+        percentage = tile.mean()
+        check2 = percentage >= tissue_threshold
+        #set the tile back to the original tile
+        tile = tile_orig
+        return check1 and check2
+
+    else:
+        return False
 
 ## A placeholder to store number of action patches per svs defined by the pathologist
 action_patch = np.zeros(len(tile_name_list))
@@ -77,14 +155,14 @@ def get_all_tiles(list):
                 #try multi pooling -> order of addition really does not matter
             st_time = time.time()
                 #slide = openslide.open_slide(filepath)
-            mean_image = 250
+            bool_tile = False
             i=0
-            while mean_image >220:
+            #checks whether the tile is over certain threshold
+            while bool_tile != True:
                 x = np.random.choice(np.arange(int(max_tile_address_x)), 1)
                 y = np.random.choice(np.arange(int(max_tile_address_y)), 1)
                 temp_image = generator.get_tile(level, (x[i], y[i]))
-                mean_image = np.mean(np.array(temp_image))
-                print(np.mean(np.array(temp_image)))
+                bool_tile = keep_tile(np.asarray(temp_image),args.tile_size,0.75)
             raw_image = temp_image.tobytes()  # tostring is deprecated
             image = pyglet.image.ImageData(temp_image.width, temp_image.height, 'RGB', raw_image)
             im = image.get_texture() #pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
@@ -261,6 +339,11 @@ def on_mouse_press(x, y, button, modifiers):
         sprite_i,sprite_j = draw_helper(tile_obj1.tile,tile_obj2.tile,image_batch)
         tile_obj1.sprite = sprite_i
         tile_obj2.sprite = sprite_j
+
+
+if __name__ == '__main__':
+    pyglet.gl.glClearColor(0.5,0.7,0.7,1)
+    pyglet.app.run()
 
 
 if __name__ == '__main__':
