@@ -23,17 +23,24 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--path', type=str, default=str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/", help='Input path')
 parser.add_argument('--magnification',type=float, default=2.5)
 parser.add_argument('--tile_size',type=int, default=256)
-parser.add_argument('--output_path',type=str,default=str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/")
+parser.add_argument('--output_path',type=str,default=str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/Annotations.csv")
 parser.add_argument('--patch_number',type=int,default=2)
 parser.add_argument('--max_magnification',type=float, default=10)
 parser.add_argument('--random',type=bool, default=True)
 
 args = parser.parse_args()
-
-with open(args.output_path+'names.csv', 'w') as csvfile:
-    fieldnames = ['Path', 'Magnification','Tile','Tile Size','Action','No Action']
-    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-    writer.writeheader()
+completed_annotations=[]
+if not os.path.isfile(args.output_path):
+    with open(args.output_path, 'w') as csvfile:
+        fieldnames = ['Path', 'Magnification','Tile','Tile Size','Action','No Action']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+else:
+    with open(args.output_path, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            if row['Path'] not in completed_annotations:
+                completed_annotations.append(row['Path'])
 
 lib = { 'Action':[], 'No Action':[] }
 
@@ -43,7 +50,7 @@ tile_name_list =[]
 count=0
 for root, dirs, files in os.walk(args.path):
     for file in files:
-        if file.endswith('.svs'):
+        if file.endswith('.svs') and root+"/"+file not in completed_annotations:
             tile_name_list.append(root+"/"+file)
 
 print(tile_name_list)
@@ -345,7 +352,7 @@ def in_box(x,y,x_center,y_center,x_width,y_height):
     return left_x < x and x < right_x and bottom_y < y and y < top_y
 
 def save_entry (path,tile,action,no_action,magnification):
-    with open(args.output_path + 'names.csv', 'a', newline='') as csvfile:
+    with open(args.output_path , 'a', newline='') as csvfile:
         fieldnames = ['Path', 'Magnification', 'Tile', 'Tile Size', 'Action', 'No Action']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         # writer.writeheader()
@@ -412,10 +419,6 @@ def on_mouse_press(x, y, button, modifiers):
                 lib['No Action'].append(tile_obj2.tile_name)
                 save_entry(tile_obj2.tile_name, tile_obj2.patch_pixel, "false", "true",tile_obj2.magnification)
 
-            if all_tiles[2][3]==10:
-                number_of_images_per_frame=4
-            else:
-                number_of_images_per_frame = 2
 
         #reset buttons
         button1_checked.color = [255,255,255]
