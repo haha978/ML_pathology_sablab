@@ -29,6 +29,7 @@ parser.add_argument('--max_magnification',type=float, default=10)
 parser.add_argument('--random',type=bool, default=True)
 
 args = parser.parse_args()
+NEXT_STATE = 0
 completed_annotations=[]
 if not os.path.isfile(args.output_path):
     with open(args.output_path, 'w') as csvfile:
@@ -53,7 +54,7 @@ for root, dirs, files in os.walk(args.path):
         if file.endswith('.svs') and root+"/"+file not in completed_annotations:
             tile_name_list.append(root+"/"+file)
 
-print(tile_name_list)
+#print(tile_name_list)
 def optical_density(tile):
     """
     Convert a tile to optical density values.
@@ -153,11 +154,10 @@ def center_image(image):
 def get_all_tiles(list,magnification,patch_number,tile_address,random):
     all_tiles = []
     for tile_name in list:
-        #im = pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
         slide = openslide.open_slide(tile_name)
         maximum_magnification = slide.properties['openslide.objective-power']
         generator = DeepZoomGenerator(slide, tile_size=args.tile_size, overlap=0, limit_bounds=True)
-        if magnification != float(slide.properties['openslide.objective-power']):
+        if magnification != int(slide.properties['openslide.objective-power']):
             level = generator.level_count-1-int(np.sqrt(np.float(slide.properties['openslide.objective-power'])/(magnification)))
         else:
             level =generator.level_count-1
@@ -167,7 +167,7 @@ def get_all_tiles(list,magnification,patch_number,tile_address,random):
         else:
             [[min_tile_address_x, max_tile_address_x],[min_tile_address_y, max_tile_address_y]]= tile_address
 
-        print(maximum_magnification)
+        #print(maximum_magnification)
         if random:
             for tile in range(patch_number):
                     #this is a problem
@@ -193,7 +193,7 @@ def get_all_tiles(list,magnification,patch_number,tile_address,random):
                 image = pyglet.image.ImageData(temp_image.width, temp_image.height, 'RGB', raw_image)
                 im = image.get_texture() #pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
                 end_time = time.time()
-                print('Time took to bring 1 image',(end_time-st_time))
+                #print('Time took to bring 1 image',(end_time-st_time))
                 center_image(im)
                 all_tiles.append((tile_name,im,[x[i],y[i]],magnification))
         else:
@@ -204,28 +204,20 @@ def get_all_tiles(list,magnification,patch_number,tile_address,random):
 
             for i in range(4):
                 for j in range(4):
-                    # this is a problem
-                    # try multi pooling -> order of addition really does not matter
-                    st_time = time.time()
-                    # slide = openslide.open_slide(filepath)
                     bool_tile = False
-
-                    # checks whether the tile is over certain threshold
 
                     temp_image = generator.get_tile(level, (x[j], y[i]))
 
                     raw_image = temp_image.tobytes()  # tostring is deprecated
                     image = pyglet.image.ImageData(temp_image.width, temp_image.height, 'RGB', raw_image)
                     im = image.get_texture()  # pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
-                    end_time = time.time()
-                    print('Time took to bring 1 image', (end_time - st_time))
                     center_image(im)
                     all_tiles.append((tile_name, im, [x[j], y[i]], magnification))
 
     return all_tiles
 
 all_tiles = get_all_tiles(tile_name_list,args.magnification,args.patch_number,None,args.random)
-print(len(all_tiles))
+#print(len(all_tiles))
 all_tiles_len = len(all_tiles)
 
 """
@@ -284,7 +276,6 @@ def draw_helper(img1,img2,batch):
 delete_sprites(img1) takes two SPRITE objects and deletes them.
 """
 def delete_sprites(im_1,im_2,all_tiles):
-
     im_1.delete()
     im_2.delete()
     all_tiles.pop(0)
@@ -321,27 +312,10 @@ button2_checked = shapes.Circle(x=926, y=150, radius = 12,
 @game_window.event
 def on_draw():
     global tile_obj1,tile_obj2,tile_obj3,tile_obj4
-    global class_text,class_label, image_batch, tile_information_1,tile_information_2,tile_information_3,tile_information_4
-
+    global class_label, image_batch, tile_information_1,tile_information_2
     game_window.clear()
-    tile_information_1.delete()
-    tile_information_1 = pyglet.text.Label(
-        text=tile_obj1.tile_name[tile_obj1.tile_name.find("TCGA"): tile_obj1.tile_name.find("TCGA") + 12] + "  " + str(
-            tile_obj1.patch_pixel) + "  " + str(tile_obj1.magnification),
-        x=313, y=100,
-        anchor_x='center', batch=main_batch, group=background)
-    tile_information_2.delete()
-    tile_information_2 = pyglet.text.Label(
-        text=tile_obj2.tile_name[tile_obj2.tile_name.find("TCGA"): tile_obj2.tile_name.find("TCGA") + 12] + "  " + str(
-            tile_obj2.patch_pixel) + "  " + str(tile_obj2.magnification),
-        x=926, y=100,
-        anchor_x='center', batch=main_batch, group=background)
     main_batch.draw()
     image_batch.draw()
-
-    # new_batch = pyglet.graphics.Batch()
-    # sprite_i,sprite_j = draw_helper(tile_i,tile_j,new_batch)
-    # new_batch.draw()
 
 def in_circle(x,y,x_center,y_center,radius):
     return (x-x_center)**2+(y-y_center)**2 <= radius**2
@@ -355,12 +329,11 @@ def save_entry (path,tile,action,no_action,magnification):
     with open(args.output_path , 'a', newline='') as csvfile:
         fieldnames = ['Path', 'Magnification', 'Tile', 'Tile Size', 'Action', 'No Action']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        # writer.writeheader()
         writer.writerow({'Path': path, "Magnification": magnification,
                          "Tile": tile, 'Tile Size': args.tile_size, "Action": action, "No Action": no_action})
 @game_window.event
 def on_mouse_press(x, y, button, modifiers):
-    global tile_obj1, tile_obj2
+    global tile_obj1, tile_obj2, NEXT_STATE
     global class_text,class_label, image_batch, button2_checked, button1_checked, tile_information_1,tile_information_2
     if in_circle(x,y,926,150,15):
         if button == mouse.LEFT:
@@ -375,28 +348,17 @@ def on_mouse_press(x, y, button, modifiers):
             elif button1_checked.color == [0,0,0]:
                 button1_checked.color = [255,255,255]
     elif in_box(x,y,game_window.width//2,30,50,30):
-        print('I am clicking next block')
-        #save the result
-
-        print(np.array(all_tiles).shape)
-
-        if class_text == "Please select the tiles with action.":
-            #a = (np.array(all_tiles)[:,[0,2,3]]== (tile_obj2.tile_name, tile_obj2.patch_pixel,tile_obj2.magnification)).all(axis=0).nonzero()
-            #print(a)
-
-
+        if NEXT_STATE == 0:
+            NEXT_STATE = 1
             if button1_checked.color == [0,0,0]:
                 lib['Action'].append(tile_obj1.tile_name)
                 save_entry(tile_obj1.tile_name, tile_obj1.patch_pixel,"true","false",tile_obj1.magnification)
-
                 patch_number=16
                 tile_address=[[4*tile_obj1.patch_pixel[0],4*tile_obj1.patch_pixel[0]+4],[4*tile_obj1.patch_pixel[1],4*tile_obj1.patch_pixel[1]+4]]
                 if (tile_obj1.magnification*4<=args.max_magnification):
                     additional_tiles = get_all_tiles(list([tile_obj1.tile_name]),tile_obj1.magnification*4,patch_number,tile_address,random=False)
                     for i in range(patch_number):
                         all_tiles.insert(2, additional_tiles[15-i])
-
-
             else:
                 lib['No Action'].append(tile_obj1.tile_name)
                 save_entry(tile_obj1.tile_name, tile_obj1.patch_pixel, "false", "true",tile_obj1.magnification)
@@ -411,47 +373,47 @@ def on_mouse_press(x, y, button, modifiers):
                 if (tile_obj2.magnification * 4 <= args.max_magnification):
                     additional_tiles = get_all_tiles(list([tile_obj2.tile_name]),tile_obj2.magnification*4,patch_number,tile_address,random=False)
                 if (tile_obj2.magnification * 4 <= args.max_magnification):
-                        for i in range(patch_number):
-                            all_tiles.insert(2, additional_tiles[15-i])
-
-                print(all_tiles)
+                    for i in range(patch_number):
+                        all_tiles.insert(2, additional_tiles[15-i])
             else:
                 lib['No Action'].append(tile_obj2.tile_name)
                 save_entry(tile_obj2.tile_name, tile_obj2.patch_pixel, "false", "true",tile_obj2.magnification)
 
-
-        #reset buttons
-        button1_checked.color = [255,255,255]
-        button2_checked.color = [255,255,255]
-        #reset pictures
-        delete_sprites(tile_obj1.sprite,tile_obj2.sprite,all_tiles)
-        print(lib)
-        #set a new_text box
-        class_label.delete()
-        class_text = "Please select the tiles with action."
-        class_label = pyglet.text.Label(text = class_text,
-                    x=game_window.width//2, y=game_window.height-80,
-                    anchor_x='center', batch = main_batch, group=foreground)
-        tile_obj1.tile_name = all_tiles[0][0]
-        tile_obj2.tile_name = all_tiles[1][0]
-        tile_obj1.tile = all_tiles[0][1]
-        tile_obj2.tile = all_tiles[1][1]
-        tile_obj1.patch_pixel = all_tiles[0][2]
-        tile_obj2.patch_pixel = all_tiles[1][2]
-        tile_obj1.magnification = all_tiles[0][3]
-        tile_obj2.magnification = all_tiles[1][3]
-        #drawthem
-        all_tiles_len = len(all_tiles)
-        sprite_i,sprite_j = draw_helper(tile_obj1.tile,tile_obj2.tile,image_batch)
-        tile_obj1.sprite = sprite_i
-        tile_obj2.sprite = sprite_j
-
+            #reset buttons
+            button1_checked.color = [255,255,255]
+            button2_checked.color = [255,255,255]
+            #reset pictures
+            delete_sprites(tile_obj1.sprite,tile_obj2.sprite,all_tiles)
+            #print(lib)
+            #set a new_text box
+            tile_obj1.tile_name = all_tiles[0][0]
+            tile_obj2.tile_name = all_tiles[1][0]
+            tile_obj1.tile = all_tiles[0][1]
+            tile_obj2.tile = all_tiles[1][1]
+            tile_obj1.patch_pixel = all_tiles[0][2]
+            tile_obj2.patch_pixel = all_tiles[1][2]
+            tile_obj1.magnification = all_tiles[0][3]
+            tile_obj2.magnification = all_tiles[1][3]
+            #drawthem
+            all_tiles_len = len(all_tiles)
+            sprite_i,sprite_j = draw_helper(tile_obj1.tile,tile_obj2.tile,image_batch)
+            tile_obj1.sprite = sprite_i
+            tile_obj2.sprite = sprite_j
+            tile_information_1.delete()
+            tile_information_1 = pyglet.text.Label(
+                text=tile_obj1.tile_name[tile_obj1.tile_name.find("TCGA"): tile_obj1.tile_name.find("TCGA") + 12] + "  " + str(
+                    tile_obj1.patch_pixel) + "  " + str(tile_obj1.magnification),
+                x=313, y=100,
+                anchor_x='center', batch=main_batch, group=background)
+            tile_information_2.delete()
+            tile_information_2 = pyglet.text.Label(
+                text=tile_obj2.tile_name[tile_obj2.tile_name.find("TCGA"): tile_obj2.tile_name.find("TCGA") + 12] + "  " + str(
+                    tile_obj2.patch_pixel) + "  " + str(tile_obj2.magnification),
+                x=926, y=100,
+                anchor_x='center', batch=main_batch, group=background)
+            NEXT_STATE = 0
 
 if __name__ == '__main__':
     pyglet.gl.glClearColor(0.5,0.7,0.7,1)
     pyglet.app.run()
 
-
-if __name__ == '__main__':
-    pyglet.gl.glClearColor(0.5,0.7,0.7,1)
-    pyglet.app.run()
