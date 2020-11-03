@@ -30,7 +30,7 @@ parser.add_argument('--path', type=str, default= input_path, help='Input path')
 parser.add_argument('--magnification',type=float, default=2.5)
 parser.add_argument('--tile_size',type=int, default=256)
 parser.add_argument('--output_path',type=str,default= output_path)
-parser.add_argument('--patch_number',type=int,default=10)
+parser.add_argument('--patch_number',type=int,default=2)
 parser.add_argument('--max_magnification',type=int, default=10)
 
 """
@@ -74,13 +74,11 @@ NUM_ACTION_TILES = 100
 if 'slide_coord.npy' not in output_files:
     save_coord(args.path, args.output_path, args.tile_size, args.magnification)
     print("Done creating metadata for the Whole Slide Images")
-    DICT_ARRAY = np.load(os.path.join(args.output_path, 'slide_coord.npy'), allow_pickle=True)
-else:
-    #now we have the slide_coord.npy saved
-    #dict array saves all the metadata for slides. Will modify this as the game progresses
-    DICT_ARRAY = np.load(os.path.join(args.output_path, 'slide_coord.npy'), allow_pickle=True)
+
+#now we have the slide_coord.npy saved
+#dict array saves all the metadata for slides. Will modify this as the game progresses
 DICT_ARRAY_PATH = os.path.join(args.output_path,'slide_coord.npy')
-print(DICT_ARRAY_PATH)
+DICT_ARRAY = np.load( DICT_ARRAY_PATH, allow_pickle=True)
 #Check whether there is a csvfile to save
 csv_path = os.path.join(args.output_path,'names.csv')
 if 'names.csv' not in output_files:
@@ -199,11 +197,16 @@ def center_image(image):
      image.anchor_x = image.width // 2
      image.anchor_y = image.height // 2
 
+"""
+This get_tiles function will be repeatedly called
+during the game to add the tiles to the all_tiles
+"""
 def get_tiles(patch_number,tile_address):
     global DICT_ARRAY, DICT_ARRAY_PATH
+    tiles = []
     dict1 = DICT_ARRAY[0]
     #check whether there are coordinates in a slide we are interested
-    while dict1['tile addresses'] != []:
+    if dict1['tile addresses'] == []:
         DICT_ARRAY = DICT_ARRAY[1:]
         np.save(DICT_ARRAY_PATH,DICT_ARRAY,allow_pickle=True)
         dict1 = DICT_ARRAY[0]
@@ -237,22 +240,24 @@ def get_tiles(patch_number,tile_address):
             im = image.get_texture() #pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
             end_time = time.time()
             center_image(im)
-            all_tiles.append((tile_name,im,[col,row],magnification))
+            tiles.append((dict1['slide name'],im,[col,row],magnification))
     else:
         magnification = 10
         [[min_tile_address_x, max_tile_address_x],[min_tile_address_y, max_tile_address_y]]= tile_address
         x = np.arange(min_tile_address_x, max_tile_address_x, 1)
         y = np.arange(min_tile_address_y, max_tile_address_y, 1)
+        print(x)
+        print(y)
         for i in range(4):
             for j in range(4):
                 bool_tile = False
-                temp_image = generator.get_tile(level, (x[j], y[i]))
+                temp_image = generator.get_tile(level, (x[i], y[j]))
                 raw_image = temp_image.tobytes()  # tostring is deprecated
                 image = pyglet.image.ImageData(temp_image.width, temp_image.height, 'RGB', raw_image)
                 im = image.get_texture()  # pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
                 center_image(im)
-                all_tiles.append((tile_name, im, [x[j], y[i]], magnification))
-    return all_tiles
+                tiles.append((dict['slide name'], im, [x[i], y[j]], magnification))
+    return tiles
 
 print(DICT_ARRAY)
 all_tiles = get_tiles(args.patch_number,None)
@@ -395,7 +400,7 @@ def on_mouse_press(x, y, button, modifiers):
                 patch_number=16
                 tile_address=[[4*tile_obj1.patch_pixel[0],4*tile_obj1.patch_pixel[0]+4],[4*tile_obj1.patch_pixel[1],4*tile_obj1.patch_pixel[1]+4]]
                 if (tile_obj1.magnification*4<=args.max_magnification):
-                    additional_tiles = get_tiles(list([tile_obj1.tile_name]),tile_obj1.magnification*4,patch_number,tile_address)
+                    additional_tiles = get_tiles(patch_number,tile_address)
                     for i in range(patch_number):
                         all_tiles.insert(2, additional_tiles[15-i])
             else:
@@ -410,8 +415,7 @@ def on_mouse_press(x, y, button, modifiers):
                 tile_address = [[4 * tile_obj2.patch_pixel[0], 4* tile_obj2.patch_pixel[0] + 4],
                                 [4 * tile_obj2.patch_pixel[1], 4 * tile_obj2.patch_pixel[1] + 4]]
                 if (tile_obj2.magnification * 4 <= args.max_magnification):
-                    additional_tiles = get_tiles(list([tile_obj2.tile_name]),tile_obj2.magnification*4,patch_number,tile_address)
-                if (tile_obj2.magnification * 4 <= args.max_magnification):
+                    additional_tiles = get_tiles(patch_number,tile_address)
                     for i in range(patch_number):
                         all_tiles.insert(2, additional_tiles[15-i])
             else:
