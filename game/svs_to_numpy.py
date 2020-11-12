@@ -127,6 +127,7 @@ def keep_tile(tile, tile_size, tissue_threshold):
 def get_tiles(tile_name,output_path):
     magnification = 2.5
     useful_tile_count=0
+    all_tile_count=0
     slide = openslide.open_slide(tile_name) # loading the svs
     maximum_magnification = slide.properties['openslide.objective-power'] # finding maximum magnification available from svs
     generator = DeepZoomGenerator(slide, tile_size=tile_size, overlap=0) # generate tiles from WSI
@@ -140,6 +141,7 @@ def get_tiles(tile_name,output_path):
     [max_tile_address_x, max_tile_address_y] = np.array(generator.level_dimensions[level]) / tile_size
     for address_x in range(int(max_tile_address_x)):
         for address_y in range(int(max_tile_address_y)):
+            all_tile_count+=1
             temp_tile = generator.get_tile(level, (address_x, address_y))
             bool_tile = keep_tile(np.asarray(temp_tile), tile_size, 0.75)
             numpy_path = output_path+"/Svs_to_numpy/"+tile_name[tile_name.rfind("/")+1:-4]
@@ -150,10 +152,10 @@ def get_tiles(tile_name,output_path):
                 path_csv =numpy_path+"/useful_tile_list.csv"
                 save_entry(path_csv, tile_name[tile_name.rfind("/")+1:-4], address_x, address_y)
                 useful_tile_count+=1
-    return useful_tile_count
+    return [all_tile_count,useful_tile_count]
 
 for i in range(len(tile_name_list)):
     tile_name_list[i][tile_name_list[i].rfind("/")+1:-4] # get the name of svs file from the whole path
     t0 = time.time()
-    useful_tile_count = get_tiles(tile_name_list[i],output_path)
-    print("Slide " +str(i+1)+ " took " +str(time.time() - t0)+" seconds with "+str(useful_tile_count)+ " tiles.")
+    [all_tile_count,useful_tile_count] = get_tiles(tile_name_list[i],output_path)
+    print("Slide " +str(i+1)+ " took " +str(time.time() - t0)+" seconds with "+str(useful_tile_count)+ " useful and " +str(all_tile_count) +" total tiles.")
