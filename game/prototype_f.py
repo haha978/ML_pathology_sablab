@@ -220,15 +220,16 @@ def get_tiles(patch_number,tile_address):
     tiles = []
     dict1 = DICT_ARRAY[0]
     #check whether there are coordinates in a slide we are interested
-    if Temp_NUM_ACTION_TILES >= NUM_ACTION_TILES or len(dict1['tile addresses'])<2 :
-        DICT_ARRAY = DICT_ARRAY[1:]
-        np.save(DICT_ARRAY_PATH,DICT_ARRAY,allow_pickle=True)
-        dict1 = DICT_ARRAY[0]
-        Temp_NUM_ACTION_TILES = 0
+
     #Now we are sure tha the slide we are interested have some tiles
 
     #NOW I have my level obtained
     if tile_address == None:
+        if Temp_NUM_ACTION_TILES >= NUM_ACTION_TILES or len(dict1['tile addresses']) < 2:
+            DICT_ARRAY = DICT_ARRAY[1:]
+            np.save(DICT_ARRAY_PATH, DICT_ARRAY, allow_pickle=True)
+            dict1 = DICT_ARRAY[0]
+            Temp_NUM_ACTION_TILES = 0
         #level = dict1['level']
         # If tile_address == None, means I am at 2.5x
         # max_x is column and max_y are rows
