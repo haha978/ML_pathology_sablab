@@ -16,19 +16,22 @@ import openslide
 from openslide import OpenSlideError
 from openslide.deepzoom import DeepZoomGenerator
 import pathlib
+from PIL import Image
+import time
 
-# print('Please type input path: ')
-# input_path = input()
-# print('Please type the output path: ')
-# output_path = input()
-input_path = 'C://Users//Joon Il Moon//Desktop//research//code//game//svs'
-output_path = 'C://Users//Joon Il Moon//Desktop//research//code//game//output'
+print('Please type input path: ')
+input_path = input()
+print('Please type the output path: ')
+output_path = input()
+path_csv_numpy="/Users/caglabahadir/Desktop/"
+#input_path = str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/"
+#output_path =  str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/"
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--path', type=str, default= input_path, help='Input path')
 parser.add_argument('--magnification',type=float, default=2.5)
-parser.add_argument('--tile_size',type=int, default=256)
+parser.add_argument('--tile_size',type=int, default=512)
 parser.add_argument('--output_path',type=str,default= output_path)
 parser.add_argument('--patch_number',type=int,default=2)
 parser.add_argument('--max_magnification',type=int, default=10)
@@ -45,23 +48,33 @@ def save_coord(path,output_path,tile_size, magnification):
                 slide_name_list.append(root+"/"+file)
     #dict_list saves slide specific data such as tile coordinates
     dict_list = []
+    coordinates = []
     for slide_name in slide_name_list:
-        slide = openslide.open_slide(slide_name)
-        maximum_magnification = slide.properties['openslide.objective-power']
-        generator = DeepZoomGenerator(slide, tile_size=tile_size, overlap=0)
-        #obtain magnification
-        if magnification != int(slide.properties['openslide.objective-power']):
-            level = generator.level_count-1-int(np.sqrt(np.float(slide.properties['openslide.objective-power'])/(magnification)))
-        else:
-            level = generator.level_count-1
-        #obtain random coordinates
-        cols ,rows = generator.level_tiles[level]
         coordinates = []
-        for col in range(cols):
-            for row in range(rows):
-                coordinates.append((col,row))
+        with open(output_path + "/Svs_to_numpy/" + slide_name[slide_name.rfind("/") + 1:-4] + "/useful_tile_list.csv",
+                  newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                col = int(row['Tile_address_x'])
+                row = int(row['Tile_address_y'])
+                coordinates.append((col, row))
+
+        #slide = openslide.open_slide(slide_name)
+        #maximum_magnification = slide.properties['openslide.objective-power']
+        #generator = DeepZoomGenerator(slide, tile_size=tile_size, overlap=0)
+        #obtain magnification
+        #if magnification != int(slide.properties['openslide.objective-power']):
+        #    level = generator.level_count-1-int(np.sqrt(np.float(slide.properties['openslide.objective-power'])/(magnification)))
+        #else:
+        #    level = generator.level_count-1
+        #obtain random coordinates
+        #cols ,rows = generator.level_tiles[level]
+        #coordinates = []
+        #for col in range(cols):
+        #    for row in range(rows):
+        #        coordinates.append((col,row))
         random.shuffle(coordinates)
-        dict = {'slide name': slide_name, 'level': level , 'tile size': tile_size, 'tile addresses': coordinates}
+        dict = {'slide name': slide_name, 'level': None , 'tile size': tile_size, 'tile addresses': coordinates}
         dict_list.append(dict)
     np.save(os.path.join(output_path,'slide_coord.npy'),dict_list)
 
@@ -69,7 +82,7 @@ args = parser.parse_args()
 NEXT_STATE = 0
 output_files = os.listdir(args.output_path)
 #The number of action tiles we want
-NUM_ACTION_TILES = 100
+NUM_ACTION_TILES = 10
 #create numpy dictionary of WSIs if there are no npy initialized
 if 'slide_coord.npy' not in output_files:
     save_coord(args.path, args.output_path, args.tile_size, args.magnification)
@@ -79,6 +92,7 @@ if 'slide_coord.npy' not in output_files:
 #dict array saves all the metadata for slides. Will modify this as the game progresses
 DICT_ARRAY_PATH = os.path.join(args.output_path,'slide_coord.npy')
 DICT_ARRAY = np.load( DICT_ARRAY_PATH, allow_pickle=True)
+Temp_NUM_ACTION_TILES = 0
 #Check whether there is a csvfile to save
 csv_path = os.path.join(args.output_path,'names.csv')
 if 'names.csv' not in output_files:
@@ -202,37 +216,38 @@ This get_tiles function will be repeatedly called
 during the game to add the tiles to the all_tiles
 """
 def get_tiles(patch_number,tile_address):
-    global DICT_ARRAY, DICT_ARRAY_PATH
+    global DICT_ARRAY, DICT_ARRAY_PATH, Temp_NUM_ACTION_TILES
     tiles = []
     dict1 = DICT_ARRAY[0]
     #check whether there are coordinates in a slide we are interested
-    if dict1['tile addresses'] == []:
+    if Temp_NUM_ACTION_TILES >= NUM_ACTION_TILES or len(dict1['tile addresses'])<2 :
         DICT_ARRAY = DICT_ARRAY[1:]
         np.save(DICT_ARRAY_PATH,DICT_ARRAY,allow_pickle=True)
         dict1 = DICT_ARRAY[0]
+        Temp_NUM_ACTION_TILES = 0
     #Now we are sure tha the slide we are interested have some tiles
-    slide = openslide.open_slide(dict1['slide name'])
-    maximum_magnification = slide.properties['openslide.objective-power']
-    generator = DeepZoomGenerator(slide, tile_size=args.tile_size, overlap=0)
+
     #NOW I have my level obtained
     if tile_address == None:
-        level = dict1['level']
+        #level = dict1['level']
         # If tile_address == None, means I am at 2.5x
         # max_x is column and max_y are rows
         magnification = 2.5
-        max_x,max_y = generator.level_tiles[level]
+        #max_x,max_y = generator.level_tiles[level]
         for tile in range(patch_number):
-            bool_tile = False
+            #bool_tile = False
             #checks whether the tile is over certain threshold
-            while bool_tile != True:
-                tile_addresses = dict1['tile addresses']
-                col, row = tile_addresses.pop()
+            #while bool_tile != True:
+            tile_addresses = dict1['tile addresses']
+            col, row = tile_addresses.pop()
                 #Need to save the modified dict1
-                dict1['tile addresses'] = tile_addresses
-                DICT_ARRAY[0] = dict1
-                np.save(DICT_ARRAY_PATH,DICT_ARRAY,allow_pickle=True)
-                temp_image = generator.get_tile(level, (col, row))
-                bool_tile = keep_tile(np.asarray(temp_image),args.tile_size,0.75)
+            dict1['tile addresses'] = tile_addresses
+            DICT_ARRAY[0] = dict1
+            np.save(DICT_ARRAY_PATH,DICT_ARRAY,allow_pickle=True)
+            temp_image = np.load(output_path + "/Svs_to_numpy/" + dict1['slide name'][dict1['slide name'].rfind("/") + 1:-4]+"/Tile_x_"+str(col)+"_Tile_y_"+str(row)+".npy" )
+            #temp_image = generator.get_tile(level, (col, row))
+            temp_image=Image.fromarray(np.uint8(temp_image))
+            #bool_tile = keep_tile(np.asarray(temp_image),args.tile_size,0.75)
             #obtain patches in raw image
             raw_image = temp_image.tobytes()  # tostring is deprecated
             image = pyglet.image.ImageData(temp_image.width, temp_image.height, 'RGB', raw_image)
@@ -241,15 +256,22 @@ def get_tiles(patch_number,tile_address):
             center_image(im)
             tiles.append((dict1['slide name'],im,[col,row],magnification))
     else:
-        level = dict1['level'] + 2
         magnification = 10
+        slide = openslide.open_slide(dict1['slide name'])
+        maximum_magnification = slide.properties['openslide.objective-power']
+        generator = DeepZoomGenerator(slide, tile_size=args.tile_size, overlap=0)
+        if magnification != int(slide.properties['openslide.objective-power']):
+            level = generator.level_count-1-int(np.sqrt(np.float(slide.properties['openslide.objective-power'])/(magnification)))
+        else:
+            level = generator.level_count-1
+
         [[min_tile_address_x, max_tile_address_x],[min_tile_address_y, max_tile_address_y]]= tile_address
         x = np.arange(min_tile_address_x, max_tile_address_x, 1)
         y = np.arange(min_tile_address_y, max_tile_address_y, 1)
         print(x)
         print(y)
-        for i in range(4):
-            for j in range(4):
+        for j in range(4):
+            for i in range(4):
                 bool_tile = False
                 temp_image = generator.get_tile(level, (x[i], y[j]))
                 raw_image = temp_image.tobytes()  # tostring is deprecated
@@ -257,6 +279,7 @@ def get_tiles(patch_number,tile_address):
                 im = image.get_texture()  # pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
                 center_image(im)
                 tiles.append((dict1['slide name'], im, [x[i], y[j]], magnification))
+                print(len(tiles))
     return tiles
 
 print(DICT_ARRAY)
@@ -297,11 +320,11 @@ class_label = pyglet.text.Label(text = class_text,
             x=game_window.width//2, y=game_window.height-80,
             anchor_x='center', batch = main_batch, group=background)
 
-tile_information_1 = pyglet.text.Label(text = tile_obj1.tile_name[tile_obj1.tile_name.find("TCGA"):tile_obj1.tile_name.find("TCGA")+12]+"  "+str(tile_obj1.patch_pixel)+"  "+str(tile_obj1.magnification),
+tile_information_1 = pyglet.text.Label(text = tile_obj1.tile_name[tile_obj1.tile_name.rfind("-")+1:-4]+"  "+str(tile_obj1.patch_pixel)+"  "+str(tile_obj1.magnification),
             x=313, y=100,
             anchor_x='center', batch = main_batch, group=background)
 
-tile_information_2 = pyglet.text.Label(text = tile_obj2.tile_name[tile_obj2.tile_name.find("TCGA"):tile_obj2.tile_name.find("TCGA")+12]+"  "+str(tile_obj2.patch_pixel)+"  "+str(tile_obj2.magnification),
+tile_information_2 = pyglet.text.Label(text = tile_obj2.tile_name[tile_obj2.tile_name.rfind("-")+1:-4]+"  "+str(tile_obj2.patch_pixel)+"  "+str(tile_obj2.magnification),
             x=926, y=100,
             anchor_x='center', batch = main_batch, group=background)
 
@@ -377,7 +400,7 @@ def save_entry (path,tile,action,no_action,magnification):
                          "Tile": tile, 'Tile Size': args.tile_size, "Action": action, "No Action": no_action})
 @game_window.event
 def on_mouse_press(x, y, button, modifiers):
-    global tile_obj1, tile_obj2, NEXT_STATE
+    global tile_obj1, tile_obj2, NEXT_STATE,Temp_NUM_ACTION_TILES
     global class_text,class_label, image_batch, button2_checked, button1_checked, tile_information_1,tile_information_2
     if in_circle(x,y,926,150,15):
         if button == mouse.LEFT:
@@ -396,11 +419,14 @@ def on_mouse_press(x, y, button, modifiers):
             NEXT_STATE = 1
             if button1_checked.color == [0,0,0]:
                 lib['Action'].append(tile_obj1.tile_name)
+                Temp_NUM_ACTION_TILES+=1
                 save_entry(tile_obj1.tile_name, tile_obj1.patch_pixel,"true","false",tile_obj1.magnification)
                 patch_number=16
                 tile_address=[[4*tile_obj1.patch_pixel[0],4*tile_obj1.patch_pixel[0]+4],[4*tile_obj1.patch_pixel[1],4*tile_obj1.patch_pixel[1]+4]]
                 if (tile_obj1.magnification*4<=args.max_magnification):
+                    t0 = time.time()
                     additional_tiles = get_tiles(patch_number,tile_address)
+                    print(str(time.time()-t0)+" seconds to bring 16 10x tiles.")
                     for i in range(patch_number):
                         all_tiles.insert(2, additional_tiles[15-i])
             else:
@@ -409,13 +435,16 @@ def on_mouse_press(x, y, button, modifiers):
 
             if button2_checked.color == [0,0,0]:
                 lib['Action'].append(tile_obj2.tile_name)
+                Temp_NUM_ACTION_TILES += 1
                 save_entry(tile_obj2.tile_name, tile_obj2.patch_pixel, "true", "false",tile_obj2.magnification)
                 #a = np.argwhere(np.array(all_tiles) == tile_obj2.tile_name)
                 patch_number=16
                 tile_address = [[4 * tile_obj2.patch_pixel[0], 4* tile_obj2.patch_pixel[0] + 4],
                                 [4 * tile_obj2.patch_pixel[1], 4 * tile_obj2.patch_pixel[1] + 4]]
                 if (tile_obj2.magnification * 4 <= args.max_magnification):
+                    t0 = time.time()
                     additional_tiles = get_tiles(patch_number,tile_address)
+                    print(str(time.time() - t0) + " seconds to bring 16 10x tiles.")
                     for i in range(patch_number):
                         all_tiles.insert(2, additional_tiles[15-i])
             else:
@@ -447,13 +476,13 @@ def on_mouse_press(x, y, button, modifiers):
             tile_obj2.sprite = sprite_j
             tile_information_1.delete()
             tile_information_1 = pyglet.text.Label(
-                text=tile_obj1.tile_name[tile_obj1.tile_name.find("TCGA"): tile_obj1.tile_name.find("TCGA") + 12] + "  " + str(
+                text=tile_obj1.tile_name[tile_obj1.tile_name.rfind("-")+1:-4] + "  " + str(
                     tile_obj1.patch_pixel) + "  " + str(tile_obj1.magnification),
                 x=313, y=100,
                 anchor_x='center', batch=main_batch, group=background)
             tile_information_2.delete()
             tile_information_2 = pyglet.text.Label(
-                text=tile_obj2.tile_name[tile_obj2.tile_name.find("TCGA"): tile_obj2.tile_name.find("TCGA") + 12] + "  " + str(
+                text=tile_obj2.tile_name[tile_obj2.tile_name.rfind("-")+1:-4] + "  " + str(
                     tile_obj2.patch_pixel) + "  " + str(tile_obj2.magnification),
                 x=926, y=100,
                 anchor_x='center', batch=main_batch, group=background)
