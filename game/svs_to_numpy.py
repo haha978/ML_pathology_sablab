@@ -19,6 +19,8 @@ print('Please type input path: ')
 input_path = input()
 print('Please type the output path: ')
 output_path = input()
+print('Please type the maximum number of svs files to be converted to numpy: ')
+maximum_svs_files = input()
 
 #input_path = str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/"
 #output_path = str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/"
@@ -29,11 +31,30 @@ magnification = 2.5
 tile_size = 512
 
 tile_name_list =[]
+completed_tile_name_list=[]
+if path.isfile(output_path+"/Complete_tile_list.csv"):
+    with open(output_path+"/Complete_tile_list.csv", newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                completed_tile_name_list.append(row['Tile_Name'])
 
 for root, dirs, files in os.walk(input_path):
     for file in files:
-        if file.endswith('.svs') and root+"/"+file:
+        if file.endswith('.svs') and root+"/"+file not in completed_tile_name_list:
             tile_name_list.append(root+"/"+file)
+
+def create_complete_list (path_csv, tile_name,Useful_Tile_Count,All_Tile_Count):
+    if not path.isfile(path_csv):
+        with open(path_csv, 'w') as csvfile:
+            fieldnames = ['Tile_Name', 'Useful_Tile_Count','All_Tile_Count']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+
+    with open(path_csv, 'a', newline='') as csvfile:
+        fieldnames = fieldnames = ['Tile_Name', 'Useful_Tile_Count','All_Tile_Count']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writerow({'Tile_Name': tile_name, 'Useful_Tile_Count':Useful_Tile_Count, 'All_Tile_Count':All_Tile_Count})
+
 
 def save_entry (path_csv, tile_name,tile_address_x,tile_address_y):
     if not path.isfile(path_csv):
@@ -41,11 +62,17 @@ def save_entry (path_csv, tile_name,tile_address_x,tile_address_y):
             fieldnames = ['Tile_Name', 'Tile_address_x', 'Tile_address_y']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
+    useful_tiles=[]
+    with open(path_csv, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            useful_tiles.append([row['Tile_address_x'],row['Tile_address_y']])
 
     with open(path_csv, 'a', newline='') as csvfile:
         fieldnames = ['Tile_Name', 'Tile_address_x', 'Tile_address_y']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writerow({'Tile_Name': tile_name, 'Tile_address_x':tile_address_x, 'Tile_address_y':tile_address_y})
+        if [str(tile_address_x),str(tile_address_y)] not in useful_tiles:
+            writer.writerow({'Tile_Name': tile_name, 'Tile_address_x':tile_address_x, 'Tile_address_y':tile_address_y})
 
 def optical_density(tile):
     """
@@ -154,8 +181,10 @@ def get_tiles(tile_name,output_path):
                 useful_tile_count+=1
     return [all_tile_count,useful_tile_count]
 
-for i in range(len(tile_name_list)):
+for i in range(min(len(tile_name_list),int(maximum_svs_files))):
+
     tile_name_list[i][tile_name_list[i].rfind("/")+1:-4] # get the name of svs file from the whole path
     t0 = time.time()
     [all_tile_count,useful_tile_count] = get_tiles(tile_name_list[i],output_path)
+    create_complete_list(output_path+"/Complete_tile_list.csv",tile_name_list[i],useful_tile_count,all_tile_count)
     print("Slide " +str(i+1)+ " took " +str(time.time() - t0)+" seconds with "+str(useful_tile_count)+ " useful and " +str(all_tile_count) +" total tiles.")
