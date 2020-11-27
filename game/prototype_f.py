@@ -19,11 +19,13 @@ import pathlib
 from PIL import Image
 import time
 
-print('Please type input path: ')
+print('Please type the input path: ')
 input_path = input()
 print('Please type the output path: ')
 output_path = input()
-
+print('Please type the number of action tiles required for each slide: ')
+NUM_ACTION_TILES = input()
+NUM_ACTION_TILES=int(NUM_ACTION_TILES)
 #input_path = str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/"
 #output_path =  str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/"
 
@@ -94,7 +96,7 @@ args = parser.parse_args()
 NEXT_STATE = 0
 output_files = os.listdir(args.output_path)
 #The number of action tiles we want
-NUM_ACTION_TILES = 10
+
 #create numpy dictionary of WSIs if there are no npy initialized
 #if 'slide_coord_numpy.npy' not in output_files:
 save_coord(args.path, args.output_path, args.tile_size, args.magnification)
