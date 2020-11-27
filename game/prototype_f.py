@@ -23,7 +23,7 @@ print('Please type input path: ')
 input_path = input()
 print('Please type the output path: ')
 output_path = input()
-path_csv_numpy="/Users/caglabahadir/Desktop/"
+
 #input_path = str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/"
 #output_path =  str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/"
 
@@ -47,36 +47,48 @@ def save_coord(path,output_path,tile_size, magnification):
             if file.endswith('.svs') and root+"/"+file:
                 slide_name_list.append(root+"/"+file)
     #dict_list saves slide specific data such as tile coordinates
-    dict_list = []
+    if os.path.isfile(os.path.join(output_path, 'slide_coord.npy')):
+        dict_list = list(np.load( os.path.join(output_path, 'slide_coord.npy'), allow_pickle=True))
+        completed_numpy = list(np.load( os.path.join(output_path, 'slide_coord_numpy.npy'), allow_pickle=True))
+        completed_numpy_names=[]
+        for numpy_name in range(len(completed_numpy)):
+            completed_numpy_names.append(completed_numpy[numpy_name]['slide name'])
+    else:
+        dict_list=[]
+        completed_numpy=[]
+        completed_numpy_names = []
     coordinates = []
     for slide_name in slide_name_list:
-        coordinates = []
-        with open(output_path + "/Svs_to_numpy/" + slide_name[slide_name.rfind("/") + 1:-4] + "/useful_tile_list.csv",
-                  newline='') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                col = int(row['Tile_address_x'])
-                row = int(row['Tile_address_y'])
-                coordinates.append((col, row))
+        if os.path.isfile(output_path + "/Svs_to_numpy/" + slide_name[slide_name.rfind("/") + 1:-4] + "/useful_tile_list.csv") and slide_name not in completed_numpy_names:
+            coordinates = []
+            with open(output_path + "/Svs_to_numpy/" + slide_name[slide_name.rfind("/") + 1:-4] + "/useful_tile_list.csv",
+                      newline='') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    col = int(row['Tile_address_x'])
+                    row = int(row['Tile_address_y'])
+                    coordinates.append((col, row))
 
-        #slide = openslide.open_slide(slide_name)
-        #maximum_magnification = slide.properties['openslide.objective-power']
-        #generator = DeepZoomGenerator(slide, tile_size=tile_size, overlap=0)
-        #obtain magnification
-        #if magnification != int(slide.properties['openslide.objective-power']):
-        #    level = generator.level_count-1-int(np.sqrt(np.float(slide.properties['openslide.objective-power'])/(magnification)))
-        #else:
-        #    level = generator.level_count-1
-        #obtain random coordinates
-        #cols ,rows = generator.level_tiles[level]
-        #coordinates = []
-        #for col in range(cols):
-        #    for row in range(rows):
-        #        coordinates.append((col,row))
-        random.shuffle(coordinates)
-        dict = {'slide name': slide_name, 'level': None , 'tile size': tile_size, 'tile addresses': coordinates}
-        dict_list.append(dict)
+            #slide = openslide.open_slide(slide_name)
+            #maximum_magnification = slide.properties['openslide.objective-power']
+            #generator = DeepZoomGenerator(slide, tile_size=tile_size, overlap=0)
+            #obtain magnification
+            #if magnification != int(slide.properties['openslide.objective-power']):
+            #    level = generator.level_count-1-int(np.sqrt(np.float(slide.properties['openslide.objective-power'])/(magnification)))
+            #else:
+            #    level = generator.level_count-1
+            #obtain random coordinates
+            #cols ,rows = generator.level_tiles[level]
+            #coordinates = []
+            #for col in range(cols):
+            #    for row in range(rows):
+            #        coordinates.append((col,row))
+            random.shuffle(coordinates)
+            dict = {'slide name': slide_name, 'level': None , 'tile size': tile_size, 'tile addresses': coordinates}
+            dict_list.append(dict)
+            completed_numpy.append(dict)
     np.save(os.path.join(output_path,'slide_coord.npy'),dict_list)
+    np.save(os.path.join(output_path, 'slide_coord_numpy.npy'), completed_numpy)
 
 args = parser.parse_args()
 NEXT_STATE = 0
@@ -84,9 +96,9 @@ output_files = os.listdir(args.output_path)
 #The number of action tiles we want
 NUM_ACTION_TILES = 10
 #create numpy dictionary of WSIs if there are no npy initialized
-if 'slide_coord.npy' not in output_files:
-    save_coord(args.path, args.output_path, args.tile_size, args.magnification)
-    print("Done creating metadata for the Whole Slide Images")
+#if 'slide_coord_numpy.npy' not in output_files:
+save_coord(args.path, args.output_path, args.tile_size, args.magnification)
+print("Done creating metadata for the Whole Slide Images")
 
 #now we have the slide_coord.npy saved
 #dict array saves all the metadata for slides. Will modify this as the game progresses
@@ -94,8 +106,8 @@ DICT_ARRAY_PATH = os.path.join(args.output_path,'slide_coord.npy')
 DICT_ARRAY = np.load( DICT_ARRAY_PATH, allow_pickle=True)
 Temp_NUM_ACTION_TILES = 0
 #Check whether there is a csvfile to save
-csv_path = os.path.join(args.output_path,'names.csv')
-if 'names.csv' not in output_files:
+csv_path = os.path.join(args.output_path,'Annotations.csv')
+if 'Annotations.csv' not in output_files:
     with open(csv_path, 'w') as csvfile:
         fieldnames = ['Path', 'Magnification','Tile','Tile Size','Action','No Action']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -394,7 +406,7 @@ def in_box(x,y,x_center,y_center,x_width,y_height):
     return left_x < x and x < right_x and bottom_y < y and y < top_y
 
 def save_entry (path,tile,action,no_action,magnification):
-    with open(os.path.join(args.output_path, 'names.csv' ), 'a', newline='') as csvfile:
+    with open(os.path.join(args.output_path, 'Annotations.csv' ), 'a', newline='') as csvfile:
         fieldnames = ['Path', 'Magnification', 'Tile', 'Tile Size', 'Action', 'No Action']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writerow({'Path': path, "Magnification": magnification,
