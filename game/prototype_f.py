@@ -26,6 +26,14 @@ output_path = input()
 print('Please type the number of action tiles required for each slide: ')
 NUM_ACTION_TILES = input()
 NUM_ACTION_TILES=int(NUM_ACTION_TILES)
+print('Please enter your name: ')
+annotator_name = input()
+print('Please enter seed: ')
+seed_num = input()
+if seed_num =="":
+    seed_num = 50
+else:
+    seed_num = int(seed_num)
 #input_path = str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/"
 #output_path =  str(pathlib.Path(__file__).parent.parent.parent.parent.parent.absolute())+"/Desktop/"
 
@@ -85,6 +93,7 @@ def save_coord(path,output_path,tile_size, magnification):
             #for col in range(cols):
             #    for row in range(rows):
             #        coordinates.append((col,row))
+            random.seed(seed_num)
             random.shuffle(coordinates)
             dict = {'slide name': slide_name, 'level': None , 'tile size': tile_size, 'tile addresses': coordinates}
             dict_list.append(dict)
@@ -111,7 +120,7 @@ Temp_NUM_ACTION_TILES = 0
 csv_path = os.path.join(args.output_path,'Annotations.csv')
 if 'Annotations.csv' not in output_files:
     with open(csv_path, 'w') as csvfile:
-        fieldnames = ['Path', 'Magnification','Tile','Tile Size','Action','No Action']
+        fieldnames = ['Path', 'Magnification','Tile','Tile Size','Action','No Action','Annotator Name']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 else:
@@ -239,7 +248,7 @@ def get_tiles(patch_number,tile_address):
 
     #NOW I have my level obtained
     if tile_address == None:
-        if Temp_NUM_ACTION_TILES >= NUM_ACTION_TILES or len(dict1['tile addresses']) < 2:
+        while Temp_NUM_ACTION_TILES >= NUM_ACTION_TILES or len(dict1['tile addresses']) < 2: #checks if the current or following slides don't have enough tiles
             DICT_ARRAY = DICT_ARRAY[1:]
             np.save(DICT_ARRAY_PATH, DICT_ARRAY, allow_pickle=True)
             dict1 = DICT_ARRAY[0]
@@ -272,6 +281,12 @@ def get_tiles(patch_number,tile_address):
             tiles.append((dict1['slide name'],im,[col,row],magnification))
     else:
         magnification = 10
+        useful_10x_tile_list = np.genfromtxt(
+            output_path + "/Svs_to_numpy/" + dict1['slide name'][dict1['slide name'].rfind(
+                "/") + 1:-4] + "/useful_tile_list_10x.csv", delimiter=',', names=True, case_sensitive=True)
+        useful_10x_tile_list = np.array(
+            [useful_10x_tile_list["Tile_address_x"], useful_10x_tile_list["Tile_address_y"]])
+
         slide = openslide.open_slide(dict1['slide name'])
         maximum_magnification = slide.properties['openslide.objective-power']
         generator = DeepZoomGenerator(slide, tile_size=args.tile_size, overlap=0)
@@ -285,16 +300,32 @@ def get_tiles(patch_number,tile_address):
         y = np.arange(min_tile_address_y, max_tile_address_y, 1)
         print(x)
         print(y)
+        tile_count_10x=0
         for j in range(4):
             for i in range(4):
-                bool_tile = False
-                temp_image = generator.get_tile(level, (x[i], y[j]))
-                raw_image = temp_image.tobytes()  # tostring is deprecated
-                image = pyglet.image.ImageData(temp_image.width, temp_image.height, 'RGB', raw_image)
-                im = image.get_texture()  # pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
-                center_image(im)
-                tiles.append((dict1['slide name'], im, [x[i], y[j]], magnification))
-                print(len(tiles))
+                use_10x_ = False
+                for tile_indice in range(len(useful_10x_tile_list[0,:])):
+                    if all([x[i], y[j]] == useful_10x_tile_list[:, tile_indice].astype(int)):
+                        use_10x_ = True
+                if use_10x_:
+                    tile_count_10x += 1
+                    temp_image = generator.get_tile(level, (x[i], y[j]))
+                    raw_image = temp_image.tobytes()  # tostring is deprecated
+                    image = pyglet.image.ImageData(temp_image.width, temp_image.height, 'RGB', raw_image)
+                    im = image.get_texture()  # pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
+                    center_image(im)
+                    tiles.append((dict1['slide name'], im, [x[i], y[j]], magnification))
+                    print(len(tiles))
+
+        if tile_count_10x % 2 == 1:
+            temp_image = Image.fromarray(np.uint8(np.zeros((args.tile_size, args.tile_size, 3))))
+            raw_image = temp_image.tobytes()  # tostring is deprecated
+            image = pyglet.image.ImageData(temp_image.width, temp_image.height, 'RGB', raw_image)
+            im = image.get_texture()  # pyglet.resource.image("tile_"+tile_name[-10:-4]+".png")
+            center_image(im)
+            tiles.append(('VOID', im, [0, 0], magnification))
+
+
     return tiles
 
 print(DICT_ARRAY)
@@ -409,10 +440,11 @@ def in_box(x,y,x_center,y_center,x_width,y_height):
 
 def save_entry (path,tile,action,no_action,magnification):
     with open(os.path.join(args.output_path, 'Annotations.csv' ), 'a', newline='') as csvfile:
-        fieldnames = ['Path', 'Magnification', 'Tile', 'Tile Size', 'Action', 'No Action']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writerow({'Path': path, "Magnification": magnification,
-                         "Tile": tile, 'Tile Size': args.tile_size, "Action": action, "No Action": no_action})
+        fieldnames = ['Path', 'Magnification', 'Tile', 'Tile Size', 'Action', 'No Action','Annotator Name']
+        if path !="VOID":
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writerow({'Path': path, "Magnification": magnification,
+                             "Tile": tile, 'Tile Size': args.tile_size, "Action": action, "No Action": no_action,"Annotator Name": annotator_name})
 @game_window.event
 def on_mouse_press(x, y, button, modifiers):
     global tile_obj1, tile_obj2, NEXT_STATE,Temp_NUM_ACTION_TILES
@@ -442,8 +474,8 @@ def on_mouse_press(x, y, button, modifiers):
                     t0 = time.time()
                     additional_tiles = get_tiles(patch_number,tile_address)
                     print(str(time.time()-t0)+" seconds to bring 16 10x tiles.")
-                    for i in range(patch_number):
-                        all_tiles.insert(2, additional_tiles[15-i])
+                    for i in range(len(additional_tiles)):
+                        all_tiles.insert(2, additional_tiles[len(additional_tiles)-1-i])
             else:
                 lib['No Action'].append(tile_obj1.tile_name)
                 save_entry(tile_obj1.tile_name, tile_obj1.patch_pixel, "false", "true",tile_obj1.magnification)
@@ -460,8 +492,8 @@ def on_mouse_press(x, y, button, modifiers):
                     t0 = time.time()
                     additional_tiles = get_tiles(patch_number,tile_address)
                     print(str(time.time() - t0) + " seconds to bring 16 10x tiles.")
-                    for i in range(patch_number):
-                        all_tiles.insert(2, additional_tiles[15-i])
+                    for i in range(len(additional_tiles)):
+                        all_tiles.insert(2, additional_tiles[len(additional_tiles)-1-i])
             else:
                 lib['No Action'].append(tile_obj2.tile_name)
                 save_entry(tile_obj2.tile_name, tile_obj2.patch_pixel, "false", "true",tile_obj2.magnification)
